@@ -2,7 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#dc0a2d">
   <title>Álbum Pokémon</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -42,8 +43,10 @@
           </div>
         </div>
       </div>
-      <button id="scan-btn" class="btn" disabled>Escanear</button>
-      <p class="hint" id="scan-status">Aponte a câmera para uma carta.</p>
+      <div class="dex-controls">
+        <button id="scan-btn" class="btn" disabled>Escanear</button>
+        <p class="hint" id="scan-status">Aponte a câmera para uma carta.</p>
+      </div>
       <button type="button" id="phone-btn" class="btn ghost" aria-expanded="false" aria-controls="phone-overlay">Usar o celular</button>
     </aside>
 
@@ -59,7 +62,7 @@
             </div>
             <a class="pill export" href="/api/cards.csv" download>Exportar CSV</a>
           </div>
-          <span class="label dark"><span id="count">0</span> cartas</span>
+          <span class="label dark count"><span id="count">0</span> cartas</span>
         </div>
         <div id="slots" class="pockets"></div>
       </div>
@@ -76,6 +79,19 @@
       <div class="phone-qr" id="phone-qr"><span class="phone-wait">Carregando...</span></div>
       <a class="phone-url" id="phone-url" href="#" target="_blank" rel="noopener"></a>
       <p class="phone-hint">Mesma rede Wi‑Fi. O celular vai avisar que o certificado não é confiável: aceite para continuar.</p>
+    </div>
+  </div>
+
+  <!-- full-screen "card found" moment: the card pops in, then flies into its pocket -->
+  <div class="reveal" id="reveal" hidden aria-live="polite">
+    <div class="reveal-backdrop"></div>
+    <div class="reveal-stage">
+      <div class="reveal-card" id="reveal-card"></div>
+      <div class="reveal-meta">
+        <div class="reveal-name" id="reveal-name"></div>
+        <div class="reveal-set" id="reveal-set"></div>
+        <div class="reveal-price" id="reveal-price"></div>
+      </div>
     </div>
   </div>
 
