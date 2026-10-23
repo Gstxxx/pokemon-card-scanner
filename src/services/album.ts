@@ -46,6 +46,8 @@ interface DbRow {
 }
 
 const db = new Database(process.env.ALBUM_DB ?? "album.db", { create: true });
+// another process may hold the file mid-recovery (two dev servers restarting together); wait instead of throwing
+db.exec("PRAGMA busy_timeout = 5000");
 db.exec("PRAGMA journal_mode = WAL");
 db.exec(`
   CREATE TABLE IF NOT EXISTS cards (

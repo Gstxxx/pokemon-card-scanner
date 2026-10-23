@@ -65,5 +65,16 @@ export async function matchPokemon(raw: string): Promise<string | null> {
       best = name;
     }
   }
-  return bestScore >= 0.72 ? best : null;
+  if (bestScore < 0.72 || !best) return null;
+  const regional = REGIONAL_FORMS.find(([re]) => re.test(raw));
+  return regional ? `${regional[1]} ${best}` : best;
 }
+
+// Regional forms are separate TCG cards ("Alolan Graveler"); cards in other languages print them
+// as a suffix ("Graveler de Alola", "Graveler de Galar")
+const REGIONAL_FORMS: [RegExp, string][] = [
+  [/alola/i, "Alolan"],
+  [/galar/i, "Galarian"],
+  [/hisui/i, "Hisuian"],
+  [/paldea/i, "Paldean"],
+];

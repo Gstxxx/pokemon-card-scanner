@@ -17,7 +17,7 @@ const NO_CARD = Symbol("no_card");
 
 const PROMPT = `Look at the Pokemon trading card in this photo and transcribe exactly, letter by letter, without guessing from the artwork:
 1. the name printed in the title bar at the top of the card;
-2. the collector number printed in small text near the bottom-left corner of the card: digits, usually followed by a slash and the set size (card number / total), sometimes letters plus digits on promo cards. NOT the HP number at the top. Copy it exactly as printed, including the part after the slash, or leave it empty if you cannot read it — never invent one;
+2. the collector number printed in tiny text in the bottom-left corner of the card: digits, usually followed by a slash and the set size (card number / total), sometimes letters plus digits on promo cards. It is NOT the HP at the top, NOT attack damage, and NOT the 4-digit Pokédex number ("No. 0193") printed near the name. Copy it exactly as printed, including the part after the slash, or leave it empty if you cannot read it — never invent one;
 3. judge the card SURFACE, not the drawing: "artwork_shiny" = the picture box shows a rainbow / glittery / holographic foil reflection (streaks, sparkle, metallic sheen); "border_shiny" = the border, text boxes or background outside the picture show that foil effect while the picture itself is matte.
 Reply with only this JSON: {"printed_name": "<name, or empty string if there is no readable card name>", "number": "<collector number as printed, or empty string>", "set": "<set name if printed, else empty>", "artwork_shiny": true|false, "border_shiny": true|false, "finish": "<holofoil if only the artwork is shiny, reverse if the border/background is shiny, normal if neither>"}`;
 
