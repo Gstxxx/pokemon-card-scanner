@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Álbum Pokémon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,700;0,900;1,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="ball"></span>
+      <span class="label">Pokédex</span>
+    </div>
+    <h1 class="title">Álbum Pokémon</h1>
+    <div class="total">
+      <span class="label">Total</span>
+      <span class="chip" id="total-value">$0.00</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="dex">
+      <div class="dex-top">
+        <span class="led" id="conn-dot"></span>
+        <span class="led small"></span>
+        <span class="led small"></span>
+        <span class="dex-status" id="conn-text">Desconectado</span>
+      </div>
+      <div class="screen">
+        <video id="camera" autoplay playsinline muted></video>
+        <canvas id="capture-canvas" hidden></canvas>
+        <div class="overlay" id="camera-overlay"><span>Câmera desligada</span></div>
+        <div class="snap" id="snap">
+          <img id="snap-img" alt="">
+          <div class="snap-info">
+            <span class="spinner"></span>
+            <span id="snap-text">Analisando...</span>
+          </div>
+        </div>
+      </div>
+      <button id="scan-btn" class="btn" disabled>Escanear</button>
+      <p class="hint" id="scan-status">Aponte a câmera para uma carta.</p>
+      <button type="button" id="phone-btn" class="btn ghost" aria-expanded="false" aria-controls="phone-overlay">Usar o celular</button>
+    </aside>
+
+    <section class="binder">
+      <div class="rings"><i></i><i></i><i></i></div>
+      <div class="sheet">
+        <div class="sheet-head">
+          <span class="label dark">Coleção</span>
+          <div class="sheet-tools">
+            <div class="sort" role="group" aria-label="Ordenar">
+              <button type="button" class="pill active" data-sort="added">Ordem de leitura</button>
+              <button type="button" class="pill" data-sort="value">Maior valor</button>
+            </div>
+            <a class="pill export" href="/api/cards.csv" download>Exportar CSV</a>
+          </div>
+          <span class="label dark"><span id="count">0</span> cartas</span>
+        </div>
+        <div id="slots" class="pockets"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="phone-overlay" id="phone-overlay" hidden>
+    <div class="phone-card" role="dialog" aria-labelledby="phone-title">
+      <div class="phone-head">
+        <span class="ball"></span>
+        <span class="label" id="phone-title">Escanear com o celular</span>
+        <button type="button" class="phone-close" id="phone-close" aria-label="Fechar">×</button>
+      </div>
+      <div class="phone-qr" id="phone-qr"><span class="phone-wait">Carregando...</span></div>
+      <a class="phone-url" id="phone-url" href="#" target="_blank" rel="noopener"></a>
+      <p class="phone-hint">Mesma rede Wi‑Fi. O celular vai avisar que o certificado não é confiável: aceite para continuar.</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

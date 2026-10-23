@@ -1,0 +1,26 @@
+{
+  "name": "pokemon-card-scanner",
+  "version": "1.0.0",
+  "description": "Scanner de cartas Pokémon em tempo real: webcam ou celular, leitura local com Qwen2.5-VL (Ollama) e preços do TCGPlayer",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/server.ts",
+    "start": "bun run src/server.ts",
+    "cert": "bun scripts/gen-cert.ts",
+    "e2e": "bun scripts/e2e.ts"
+  },
+  "dependencies": {
+    "hono": "^4.13.13",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^5.5.0",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/qrcode": "^1.5.6"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  }
+}
