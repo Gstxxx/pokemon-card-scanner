@@ -17,13 +17,17 @@ const NO_CARD = Symbol("no_card");
 
 const PROMPT = `Look at the Pokemon trading card in this photo and transcribe exactly, letter by letter, without guessing from the artwork:
 1. the name printed in the title bar at the top of the card;
-2. the collector number printed in small text at the bottom of the card, which looks like "013/094" or "SV7" (NOT the HP number at the top). Copy it whole, including the part after the slash;
+2. the collector number printed in small text near the bottom-left corner of the card: digits, usually followed by a slash and the set size (card number / total), sometimes letters plus digits on promo cards. NOT the HP number at the top. Copy it exactly as printed, including the part after the slash, or leave it empty if you cannot read it — never invent one;
 3. judge the card SURFACE, not the drawing: "artwork_shiny" = the picture box shows a rainbow / glittery / holographic foil reflection (streaks, sparkle, metallic sheen); "border_shiny" = the border, text boxes or background outside the picture show that foil effect while the picture itself is matte.
 Reply with only this JSON: {"printed_name": "<name, or empty string if there is no readable card name>", "number": "<collector number as printed, or empty string>", "set": "<set name if printed, else empty>", "artwork_shiny": true|false, "border_shiny": true|false, "finish": "<holofoil if only the artwork is shiny, reverse if the border/background is shiny, normal if neither>"}`;
+
+// Values the model has echoed back from prompt wording instead of reading the card
+const PLACEHOLDER_NUMBERS = new Set(["013/094", "13/94", "sv7", "123", "nnn/nnn", "number/total"]);
 
 // The model sometimes drops the slash ("10/102" -> "10102"); put it back when the split makes sense
 function recoverSlash(raw: string): string {
   const s = raw.trim();
+  if (PLACEHOLDER_NUMBERS.has(s.toLowerCase())) return "";
   if (!/^\d{5,6}$/.test(s)) return s;
   for (const totalLen of [3, 2]) {
     const num = parseInt(s.slice(0, -totalLen), 10), total = parseInt(s.slice(-totalLen), 10);
@@ -45,6 +49,20 @@ function parsePrintedTotal(raw: string): string {
   const digits = after.match(/\d{1,3}/)?.[0];
   if (!digits) return "";
   return String(parseInt(digits, 10));
+}
+
+// A bare number without a set total is usually HP or attack damage, and a total under 10 or
+// smaller than the number means the slash landed in the wrong place; only letter-prefixed promo
+// codes (SWSH015, TG12) are trusted on their own
+function validateNumber(number: string, printedTotal: string): { number: string; printedTotal: string } {
+  const numeric = /^\d+$/.test(number);
+  if (printedTotal) {
+    const total = parseInt(printedTotal, 10);
+    const n = numeric ? parseInt(number, 10) : NaN;
+    if (total < 10 || (numeric && n > total)) return { number: "", printedTotal: "" };
+    return { number, printedTotal };
+  }
+  return { number: numeric ? "" : number, printedTotal: "" };
 }
 
 // The two surface flags are more reliable than the model's own label, so they win when present
@@ -102,8 +120,7 @@ async function tryIdentify(base64Image: string): Promise<CardIdentification | ty
     return {
       name,
       set: String(parsed.set ?? ""),
-      number: normalizeNumber(rawNumber),
-      printedTotal: parsePrintedTotal(rawNumber),
+      ...validateNumber(normalizeNumber(rawNumber), parsePrintedTotal(rawNumber)),
       finish: normalizeFinish(parsed.finish, parsed.artwork_shiny, parsed.border_shiny),
       confidence: 0.9,
     };

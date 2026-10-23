@@ -135,6 +135,16 @@ function sendLiveFrame() {
 
 function startConfirm(name) {
   if (confirming) return;
+  // already in the album (canonical names may carry a suffix such as "Charizard ex")
+  const wanted = name.toLowerCase();
+  const owned = cards.find((c) => {
+    const n = String(c.name).toLowerCase();
+    return n === wanted || n.startsWith(wanted + " ");
+  });
+  if (owned) {
+    statusEl.textContent = `${owned.name} já está no álbum`;
+    return;
+  }
   const url = grabFrame(0.95);
   if (!url) return;
   confirming = true;
