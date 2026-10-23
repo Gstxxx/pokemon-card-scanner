@@ -39,6 +39,7 @@ let reconnectDelay = 1000;
 let cards = []; // rows from /api/cards, in reading order (id ascending)
 let sortMode = "added"; // "added" | "value"
 let eagerKey = null; // card about to be revealed: its pocket image must not be lazy
+let viewerOpen = false; // 3D viewer showing: ignore "maybe" so the camera does not freeze underneath it
 const sortBtns = document.querySelectorAll("[data-sort]");
 
 // entrance stagger: re-renders in the first second keep the same timeline instead of restarting it
@@ -87,7 +88,7 @@ function connect() {
       return;
     }
     if (confirming) return onConfirmResult(msg);
-    if (msg.type === "maybe") startConfirm(msg.name);
+    if (msg.type === "maybe") { if (!viewerOpen) startConfirm(msg.name); }
     else if (msg.type === "no_card" && scanning) statusEl.textContent = "Procurando carta...";
   };
 }
@@ -258,7 +259,18 @@ async function removeCard(id) {
 
 slotsEl.addEventListener("click", (e) => {
   const btn = e.target.closest(".remove");
-  if (btn) removeCard(Number(btn.dataset.id));
+  if (btn) return removeCard(Number(btn.dataset.id));
+  const frame = e.target.closest(".pocket-frame");
+  const pocket = frame?.closest(".pocket.filled");
+  if (pocket) openViewer(Number(pocket.dataset.id), frame);
+});
+slotsEl.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const frame = e.target.closest?.(".pocket-frame");
+  const pocket = frame?.closest(".pocket.filled");
+  if (!pocket) return;
+  e.preventDefault();
+  openViewer(Number(pocket.dataset.id), frame);
 });
 
 function setSort(mode) {
@@ -358,7 +370,7 @@ function render() {
     const lazy = c && eagerKey === key(c) ? "eager" : "lazy";
 
     slot.innerHTML = `
-      <div class="pocket-frame">
+      <div class="pocket-frame"${c ? ` tabindex="0" role="button" aria-label="Ver ${esc(c.name)} em 3D"` : ""}>
         <span class="pocket-num">${String(i + 1).padStart(2, "0")}</span>
         <span class="mark"></span>
         ${c ? `<button type="button" class="remove" data-id="${c.id}" title="Remover ${esc(c.name)}" aria-label="Remover ${esc(c.name)}">×</button>` : ""}
@@ -441,6 +453,7 @@ function revealPriceHtml(c) {
 
 async function revealCard(msg) {
   const row = cards.find((c) => key(c) === key(msg)) ?? msg;
+  if (V.open) await closeViewer(true);
 
   revealCardEl.innerHTML = msg.image
     ? `<img src="${esc(msg.image)}" alt="${esc(msg.name)}">`
@@ -491,6 +504,241 @@ async function revealCard(msg) {
   revealCardEl.innerHTML = "";
   await wait(250);
 }
+
+// ---------- 3D viewer: tap a pocket, drag to rotate, flip to see the back ----------
+
+const viewerEl = document.getElementById("viewer");
+const viewerScene = document.getElementById("viewer-scene");
+const viewerCard = document.getElementById("viewer-card");
+const viewerFront = document.getElementById("viewer-front");
+const viewerName = document.getElementById("viewer-name");
+const viewerSet = document.getElementById("viewer-set");
+const viewerPrice = document.getElementById("viewer-price");
+
+const VIEWER_MS = 420; // open/close flight
+const DEG_PER_PX = 0.3; // drag sensitivity: a full-width swipe on a phone is roughly one flip
+const TILT_MAX = 70; // rotateX clamp, so the card never goes upside down
+const SWAY_DEG = 8;
+const SWAY_PERIOD = 9000;
+
+const V = {
+  open: false, id: null, frame: null,
+  rx: 0, ry: 0, // angles the user owns
+  vrx: 0, vry: 0, // inertia, degrees per frame
+  sway: 0, // 0..1 amplitude of the idle sway, eased in and out
+  dragging: false, pointerId: null, lastX: 0, lastY: 0, lastMove: 0, moved: 0, lastTap: 0,
+  idleSince: 0, tween: null, raf: null,
+};
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const swayOffset = () => V.sway * SWAY_DEG * Math.sin((performance.now() / SWAY_PERIOD) * Math.PI * 2);
+
+function setAngles() {
+  const rx = V.rx, ry = V.ry + swayOffset();
+  viewerCard.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
+  viewerCard.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
+  // flat white sheen: stronger the further the card turns away from flat
+  const rad = Math.PI / 180;
+  const glare = Math.min(0.22, Math.abs(Math.sin(ry * rad)) * 0.16 + Math.abs(Math.sin(rx * rad)) * 0.12);
+  viewerFront.style.setProperty("--glare", glare.toFixed(3));
+}
+
+function viewerTick() {
+  if (!V.open) return;
+  const now = performance.now();
+  if (V.tween) {
+    const k = Math.min(1, (now - V.tween.t0) / V.tween.ms);
+    const e = 1 - Math.pow(1 - k, 3);
+    V.rx = V.tween.rx0 + (V.tween.rx1 - V.tween.rx0) * e;
+    V.ry = V.tween.ry0 + (V.tween.ry1 - V.tween.ry0) * e;
+    if (k >= 1) { V.tween = null; V.idleSince = now; }
+  } else if (!V.dragging) {
+    V.rx = clamp(V.rx + V.vrx, -TILT_MAX, TILT_MAX);
+    V.ry += V.vry;
+    V.vrx *= 0.94;
+    V.vry *= 0.94;
+    if (Math.abs(V.vrx) < 0.02) V.vrx = 0;
+    if (Math.abs(V.vry) < 0.02) V.vry = 0;
+  }
+  const idle = !V.dragging && !V.tween && V.vrx === 0 && V.vry === 0 && now - V.idleSince > 700;
+  const target = idle && !reducedMotion.matches ? 1 : 0;
+  V.sway += (target - V.sway) * 0.04;
+  setAngles();
+  V.raf = requestAnimationFrame(viewerTick);
+}
+
+function tweenTo(rx, ry, ms = 380) {
+  V.vrx = V.vry = 0;
+  V.ry += swayOffset();
+  V.sway = 0;
+  V.tween = { t0: performance.now(), ms, rx0: V.rx, ry0: V.ry, rx1: clamp(rx, -TILT_MAX, TILT_MAX), ry1: ry };
+}
+
+// back to the front face by the shortest way
+function resetAngle() {
+  tweenTo(0, Math.round(V.ry / 360) * 360);
+}
+
+function flipTransform(from, to) {
+  const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+  const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+  return `translate(${dx}px, ${dy}px) scale(${from.width / to.width})`;
+}
+
+function lockScroll() {
+  document.body.style.paddingRight = `${window.innerWidth - document.documentElement.clientWidth}px`;
+  document.documentElement.classList.add("locked");
+}
+function unlockScroll() {
+  document.documentElement.classList.remove("locked");
+  document.body.style.paddingRight = "";
+}
+
+async function openViewer(id, frame) {
+  const c = cards.find((x) => x.id === id);
+  if (!c || V.open) return;
+  V.open = viewerOpen = true;
+  V.id = id;
+  V.frame = frame;
+  V.rx = V.ry = V.vrx = V.vry = V.sway = 0;
+  V.tween = null;
+  V.dragging = false;
+  V.idleSince = performance.now();
+
+  viewerFront.innerHTML = c.image
+    ? `<img src="${esc(c.image)}" alt="${esc(c.name)}" draggable="false">`
+    : `<span class="reveal-blank">${esc(c.name)}</span>`;
+  viewerName.textContent = c.name;
+  viewerSet.textContent = [c.set, c.number].filter(Boolean).join(" · ");
+  viewerPrice.innerHTML = revealPriceHtml(c);
+  viewerCard.classList.remove("straight");
+  setAngles();
+
+  lockScroll();
+  viewerEl.classList.remove("in", "out");
+  viewerScene.classList.remove("flying");
+  viewerScene.style.transform = "";
+  viewerEl.hidden = false;
+
+  if (!reducedMotion.matches) {
+    // FLIP: start where the pocket is, land in the center
+    viewerScene.style.transform = flipTransform(frame.getBoundingClientRect(), viewerScene.getBoundingClientRect());
+    void viewerScene.offsetWidth;
+    viewerScene.classList.add("flying");
+  }
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  if (!V.open) return;
+  viewerEl.classList.add("in");
+  viewerScene.style.transform = "";
+  viewerScene.focus({ preventScroll: true });
+  cancelAnimationFrame(V.raf);
+  V.raf = requestAnimationFrame(viewerTick);
+}
+
+async function closeViewer(instant) {
+  if (!V.open) return;
+  V.open = viewerOpen = false;
+  cancelAnimationFrame(V.raf);
+  V.dragging = false;
+  viewerScene.classList.remove("dragging");
+
+  if (!instant && !reducedMotion.matches) {
+    // straighten the card and fly it back into its pocket while the backdrop fades
+    viewerEl.classList.remove("in");
+    viewerEl.classList.add("out");
+    viewerCard.classList.add("straight");
+    V.ry = Math.round((V.ry + swayOffset()) / 360) * 360;
+    V.rx = 0;
+    V.sway = 0;
+    setAngles();
+    const frame = V.frame?.isConnected ? V.frame : slotsEl.querySelector(`.pocket[data-id="${V.id}"] .pocket-frame`);
+    viewerScene.classList.add("flying");
+    viewerScene.style.transform = frame
+      ? flipTransform(frame.getBoundingClientRect(), viewerScene.getBoundingClientRect())
+      : "scale(0.6)";
+    await wait(VIEWER_MS);
+    if (V.open) return; // reopened meanwhile
+  }
+
+  viewerEl.hidden = true;
+  viewerEl.classList.remove("in", "out");
+  viewerScene.classList.remove("flying");
+  viewerScene.style.transform = "";
+  viewerCard.classList.remove("straight");
+  viewerFront.innerHTML = "";
+  unlockScroll();
+  if (V.frame?.isConnected) V.frame.focus({ preventScroll: true });
+  V.frame = null;
+}
+
+viewerScene.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  viewerScene.setPointerCapture(e.pointerId);
+  V.pointerId = e.pointerId;
+  V.dragging = true;
+  V.tween = null;
+  V.ry += swayOffset(); // fold the sway in so nothing jumps when the drag starts
+  V.sway = 0;
+  V.vrx = V.vry = 0;
+  V.lastX = e.clientX;
+  V.lastY = e.clientY;
+  V.lastMove = performance.now();
+  V.moved = 0;
+  viewerScene.classList.add("dragging");
+  e.preventDefault();
+});
+
+viewerScene.addEventListener("pointermove", (e) => {
+  if (!V.dragging || e.pointerId !== V.pointerId) return;
+  const dx = e.clientX - V.lastX, dy = e.clientY - V.lastY;
+  V.lastX = e.clientX;
+  V.lastY = e.clientY;
+  V.moved += Math.abs(dx) + Math.abs(dy);
+  V.ry += dx * DEG_PER_PX;
+  V.rx = clamp(V.rx - dy * DEG_PER_PX, -TILT_MAX, TILT_MAX);
+  // light inertia: speed over the last move, normalised to one frame and capped
+  const now = performance.now();
+  const dt = Math.max(8, now - V.lastMove);
+  V.vry = clamp(dx * DEG_PER_PX * (16.7 / dt) * 0.5, -8, 8);
+  V.vrx = clamp(-dy * DEG_PER_PX * (16.7 / dt) * 0.5, -4, 4);
+  V.lastMove = now;
+});
+
+function endDrag(e) {
+  if (!V.dragging || e.pointerId !== V.pointerId) return;
+  V.dragging = false;
+  viewerScene.classList.remove("dragging");
+  const now = performance.now();
+  // no inertia if the pointer was held still before release, or if motion is reduced
+  if (now - V.lastMove > 80 || reducedMotion.matches) V.vrx = V.vry = 0;
+  V.idleSince = now;
+  if (V.moved < 8) {
+    if (now - V.lastTap < 320) { resetAngle(); V.lastTap = 0; }
+    else V.lastTap = now;
+  }
+}
+viewerScene.addEventListener("pointerup", endDrag);
+viewerScene.addEventListener("pointercancel", endDrag);
+viewerScene.addEventListener("lostpointercapture", endDrag);
+
+document.getElementById("viewer-close").addEventListener("click", () => closeViewer());
+document.getElementById("viewer-backdrop").addEventListener("click", () => closeViewer());
+viewerEl.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+
+document.addEventListener("keydown", (e) => {
+  if (!V.open) return;
+  const step = { ArrowLeft: [0, -20], ArrowRight: [0, 20], ArrowUp: [-15, 0], ArrowDown: [15, 0] }[e.key];
+  if (step) {
+    e.preventDefault();
+    const base = V.tween ? { rx: V.tween.rx1, ry: V.tween.ry1 } : { rx: V.rx, ry: V.ry };
+    tweenTo(base.rx + step[0], base.ry + step[1], 260);
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    closeViewer();
+  } else if (e.key === "Home" || e.key === "0") {
+    resetAngle();
+  }
+});
 
 let toastTimer = null;
 function toast(msg) {

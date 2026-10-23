@@ -760,6 +760,167 @@ body {
 .reveal-price .variant { font-size: 11px; padding: 4px 8px; border-color: var(--white); color: var(--white); background: var(--black); }
 .reveal-price .price-orig { color: var(--grey-2); font-size: 12px; }
 
+/* ---------- 3D card viewer ---------- */
+
+.viewer {
+  position: fixed; inset: 0;
+  z-index: 15;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal));
+}
+.viewer[hidden] { display: none; }
+
+.viewer-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(21, 21, 21, 0.88);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.viewer.in .viewer-backdrop { opacity: 1; }
+
+.viewer-close {
+  position: absolute;
+  top: calc(14px + var(--sat)); right: calc(14px + var(--sar));
+  z-index: 2;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font);
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--white);
+  background: var(--black);
+  border: 3px solid var(--white);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.3s, background 0.12s;
+}
+.viewer.in .viewer-close { opacity: 1; }
+.viewer-close:hover { background: var(--red); }
+.viewer-close:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+
+.viewer-stage {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 18px;
+  max-width: 100%;
+}
+
+/* the scene is what flies in from the pocket; the card inside it is what rotates */
+.viewer-scene {
+  position: relative;
+  width: min(380px, 42vw, calc((100vh - 250px) * 5 / 7));
+  aspect-ratio: 5 / 7;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  outline: none;
+  will-change: transform;
+}
+.viewer-scene.flying { transition: transform 0.42s var(--ease); }
+.viewer-scene.dragging { cursor: grabbing; }
+.viewer-scene:focus-visible .viewer-card { outline: 3px solid var(--red); outline-offset: 6px; }
+
+.viewer-card {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+}
+
+.face {
+  position: absolute; inset: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 3px solid var(--white);
+  background: var(--black);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+.face.front img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.face.front .reveal-blank { font-size: 26px; }
+/* flat white sheen whose opacity follows the tilt (set from JS) */
+.face.front::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: var(--white);
+  opacity: var(--glare, 0);
+  pointer-events: none;
+}
+
+/* back of the card: Pokédex black, white Pokéball mark, inner frame */
+.face.back {
+  transform: rotateY(180deg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8%;
+  background: var(--black);
+}
+.back-ring {
+  position: absolute; inset: 5%;
+  border: 3px solid var(--white);
+  border-radius: 10px;
+  opacity: 0.6;
+}
+.back-ball {
+  position: relative;
+  width: 46%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--red);
+  border: 5px solid var(--white);
+  overflow: hidden;
+}
+.back-ball::before {
+  content: "";
+  position: absolute;
+  left: -5px; right: -5px; top: 50%;
+  height: 5px;
+  background: var(--white);
+  transform: translateY(-50%);
+}
+.back-ball::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 28%; height: 28%;
+  border-radius: 50%;
+  background: var(--black);
+  border: 5px solid var(--white);
+  transform: translate(-50%, -50%);
+}
+.back-label {
+  font-size: 14px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--white);
+}
+
+.viewer-meta { transition: opacity 0.3s; }
+.viewer-hint {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--grey-3);
+  margin-top: 4px;
+}
+
+.viewer-card.straight { transition: transform 0.42s var(--ease); }
+
+/* scroll lock while the viewer is open; the viewer itself swallows touch scrolling */
+html.locked { overflow: hidden; }
+.viewer { touch-action: none; }
+
 /* ---------- motion (only for people who did not ask for less) ---------- */
 
 @media (prefers-reduced-motion: no-preference) {
@@ -774,8 +935,8 @@ body {
   .reveal-card { opacity: 0; }
   .reveal.in .reveal-card { animation: reveal-pop 0.46s var(--ease) forwards; }
   .reveal-meta { opacity: 0; transform: translateY(10px); transition: opacity 0.3s 0.22s, transform 0.3s 0.22s; }
-  .reveal.in .reveal-meta { opacity: 1; transform: none; }
-  .reveal.fly .reveal-meta { opacity: 0; transition: opacity 0.2s; }
+  .reveal.in .reveal-meta, .viewer.in .reveal-meta { opacity: 1; transform: none; }
+  .reveal.fly .reveal-meta, .viewer.out .reveal-meta { opacity: 0; transition: opacity 0.2s; }
   .reveal.fly .reveal-card { opacity: 1; }
 }
 
@@ -845,6 +1006,8 @@ body {
   .price-block { flex-direction: row; align-items: center; gap: 6px; }
   .pocket .price-orig { display: none; }
   .reveal-card { width: min(64vw, 300px, calc((100vh - 250px) * 5 / 7)); }
+  .viewer-scene { width: min(70vw, 320px, calc((100vh - 260px) * 5 / 7)); }
+  .viewer-close { top: calc(10px + var(--sat)); right: calc(10px + var(--sar)); }
 }
 
 /* landscape phones: Pokédex beside the album, controls back in flow */
@@ -860,6 +1023,7 @@ body {
   .toast { bottom: calc(16px + var(--sab)); }
   .pockets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reveal-card { width: min(64vw, 300px, calc((100vh - 170px) * 5 / 7)); }
-  .reveal-stage { flex-direction: row; gap: 22px; }
+  .reveal-stage, .viewer-stage { flex-direction: row; gap: 22px; }
   .reveal-meta { align-items: flex-start; text-align: left; }
+  .viewer-scene { width: min(40vw, calc((100vh - 70px) * 5 / 7)); }
 }

@@ -95,6 +95,30 @@
     </div>
   </div>
 
+  <!-- 3D card viewer: tap a pocket, drag to rotate, see the back -->
+  <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Carta em 3D">
+    <div class="viewer-backdrop" id="viewer-backdrop"></div>
+    <button type="button" class="viewer-close" id="viewer-close" aria-label="Fechar">×</button>
+    <div class="viewer-stage">
+      <div class="viewer-scene" id="viewer-scene" tabindex="0" aria-label="Arraste ou use as setas para girar a carta">
+        <div class="viewer-card" id="viewer-card">
+          <div class="face front" id="viewer-front"></div>
+          <div class="face back" aria-hidden="true">
+            <span class="back-ring"></span>
+            <span class="back-ball"></span>
+            <span class="back-label">Pokédex</span>
+          </div>
+        </div>
+      </div>
+      <div class="reveal-meta viewer-meta">
+        <div class="reveal-name" id="viewer-name"></div>
+        <div class="reveal-set" id="viewer-set"></div>
+        <div class="reveal-price" id="viewer-price"></div>
+        <p class="viewer-hint">Arraste para girar · toque duplo centraliza</p>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
   <script src="app.js"></script>
 </body>
